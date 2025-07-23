@@ -1,0 +1,70 @@
+openapi: 3.0.4
+info:
+  title: API Backend-Challeng Itau
+  description: API Backend-Challenge do Itau
+  contact:
+    email: leandroluz201616@gmail.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.12
+servers:
+  - url: http://localhost:8080
+    description: Desenvolvimento local
+  - url: https://api.seu-dominio.com
+    description: Produção (Kubernetes)
+tags:
+  - name: JWT
+    description: Operações sobre tokens JWT
+paths:
+  /api/v1/jwt/validate:
+    post:
+      tags:
+        - JWT
+      summary: Validações de tokens JWT.
+      description: Submeta tokens JWT e verifique se é valido perante as regras já propostas.
+      operationId: validateJwtToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JwtInput'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    JwtInput:
+      type: object
+      properties:
+        jwt:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJTZWVkIjoiNzg0MSIsIk5hbWUiOiJUb25pbmhvIEFyYXVqbyJ9.QY05sIjtrcJnP533kQNk8QXcaleJ1Q01jWY_ZzIZuAg
+
+    JwtResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
