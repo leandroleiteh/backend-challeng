@@ -55,7 +55,7 @@ components:
       type: object
       properties:
         valid:
-          type: boolean
+          type: string
 
 
     Error:
