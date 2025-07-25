@@ -1,0 +1,77 @@
+name: CD – Deploy to ECS
+
+on:
+  workflow_run:
+    workflows: ["CI – Build & Push Docker"]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION:          us-east-1
+      ECR_REGISTRY:        ${{ secrets.ECR_REGISTRY }}
+      IMAGE_NAME:          backend-challenge
+      IMAGE_TAG:           ${{ github.event.workflow_run.head_sha }}
+      CLUSTER_NAME:        backend-challenge-cluster
+      SERVICE_NAME:        backend-challenge-service
+      EXECUTION_ROLE_ARN:  arn:aws:iam::675080425843:role/backend-challenge-execution-role
+      LOG_GROUP:           /ecs/backend-challenge
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Register new Task Definition
+        id: register
+        run: |
+          FAMILY="${IMAGE_NAME}-task"
+          IMAGE_URI="${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          # monta o JSON de container-definitions
+          cat <<EOF >container-definitions.json
+  [
+    {
+      "name": "${IMAGE_NAME}",
+      "image": "${IMAGE_URI}",
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOG_GROUP}",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "${IMAGE_NAME}"
+        }
+      }
+    }
+  ]
+  EOF
+  
+  # registra uma nova task-definition
+  aws ecs register-task-definition \
+  --family "$FAMILY" \
+  --network-mode awsvpc \
+  --requires-compatibilities FARGATE \
+  --cpu 512 --memory 1024 \
+  --execution-role-arn "${EXECUTION_ROLE_ARN}" \
+  --container-definitions file://container-definitions.json \
+  > new-task.json
+
+  # extrai o ARN da nova revisão
+  NEW_ARN=$(jq -r '.taskDefinition.taskDefinitionArn' new-task.json)
+  echo "new_task_definition_arn=$NEW_ARN" >> $GITHUB_OUTPUT
+
+- name: Update ECS Service
+  run: |
+    aws ecs update-service \
+      --cluster "${CLUSTER_NAME}" \
+      --service "${SERVICE_NAME}" \
+      --task-definition "${{ steps.register.outputs.new_task_definition_arn }}"
