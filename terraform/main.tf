@@ -2,7 +2,6 @@ provider "aws" {
   region = var.region
 }
 
-# 1. VPC + subnets (públicas)
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "6.0.0"
@@ -13,14 +12,12 @@ module "vpc" {
   public_subnets     = ["10.0.1.0/24", "10.0.2.0/24"]
   enable_nat_gateway = false
 
-  # opcional: tags para todos os recursos
   tags = {
     Project = var.app_name
     Env     = "prod"
   }
 }
 
-# 2. Security Group para o ALB e para o ECS
 resource "aws_security_group" "alb_sg" {
   name        = "${var.app_name}-alb-sg"
   description = "Allow HTTP from anywhere"
@@ -32,7 +29,6 @@ resource "aws_security_group" "alb_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -52,7 +48,6 @@ resource "aws_security_group" "ecs_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -66,7 +61,6 @@ resource "aws_ecs_cluster" "cluster" {
   name = "${var.app_name}-cluster"
 }
 
-# 4. IAM Role para Task Execution
 data "aws_iam_policy_document" "ecs_task_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -87,7 +81,31 @@ resource "aws_iam_role_policy_attachment" "ecs_task_exec_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 5. Task Definition
+# Permissões para logs, métricas e traces
+resource "aws_iam_role_policy" "ecs_observability_policy" {
+  name = "${var.app_name}-observability"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "cloudwatch:PutMetricData",
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = ["*"]
+      }
+    ]
+  })
+}
+
+# 5. Task Definition (app + OpenTelemetry Collector sidecar)
 resource "aws_ecs_task_definition" "task" {
   family                   = var.app_name
   cpu                      = "256"
@@ -97,16 +115,53 @@ resource "aws_ecs_task_definition" "task" {
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
 
   container_definitions = jsonencode([
+    // Seu container Quarkus, com OTel configurado
     {
       name      = var.app_name
       image     = "${var.ecr_repo_url}:latest"
-      portMappings = [
-        {
-          containerPort = 8080
-          protocol      = "tcp"
-        }
-      ]
       essential = true
+
+      portMappings = [{
+        containerPort = 8080
+        protocol      = "tcp"
+      }]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/${var.app_name}"
+          awslogs-region        = var.region
+          awslogs-stream-prefix = var.app_name
+        }
+      }
+
+      environment = [
+        { name = "QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4317" },
+        { name = "QUARKUS_OTEL_RESOURCE_ATTRIBUTES", value = "service.name=${var.app_name}" }
+      ]
+    },
+
+    // Sidecar do AWS Distro for OpenTelemetry Collector
+    {
+      name      = "otel-collector"
+      image     = "public.ecr.aws/aws-observability/aws-otel-collector:latest"
+      essential = false
+
+      portMappings = [
+        { containerPort = 4317, protocol = "tcp" },   // OTLP/gRPC
+        { containerPort = 55680, protocol = "tcp" }   // OTLP/HTTP
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/${var.app_name}"
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "otel"
+        }
+      }
+
+      # Você pode customizar via arquivo de configuração montado em volume, se desejar.
     }
   ])
 }
@@ -120,11 +175,11 @@ resource "aws_lb" "alb" {
 }
 
 resource "aws_lb_target_group" "tg" {
-  name     = "${var.app_name}-tg"
+  name        = "${var.app_name}-tg"
   target_type = "ip"
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = module.vpc.vpc_id
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = module.vpc.vpc_id
 
   health_check {
     path                = "/q/health/ready"
@@ -156,8 +211,8 @@ resource "aws_ecs_service" "service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = module.vpc.public_subnets
-    security_groups = [aws_security_group.ecs_sg.id]
+    subnets          = module.vpc.public_subnets
+    security_groups  = [aws_security_group.ecs_sg.id]
     assign_public_ip = true
   }
 
