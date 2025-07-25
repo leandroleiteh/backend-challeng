@@ -2,7 +2,8 @@ name: CD – Deploy to ECS
 
 on:
   workflow_run:
-    workflows: ["CI – Build & Push Docker"]
+    workflows:
+      - CI – Build & Push Docker
     types:
       - completed
 
@@ -21,6 +22,9 @@ jobs:
       LOG_GROUP:           /ecs/backend-challenge
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -34,44 +38,40 @@ jobs:
           FAMILY="${IMAGE_NAME}-task"
           IMAGE_URI="${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-          # monta o JSON de container-definitions
-          cat <<EOF >container-definitions.json
-  [
-    {
-      "name": "${IMAGE_NAME}",
-      "image": "${IMAGE_URI}",
-      "portMappings": [
-        { "containerPort": 8080, "protocol": "tcp" }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "${LOG_GROUP}",
-          "awslogs-region": "${AWS_REGION}",
-          "awslogs-stream-prefix": "${IMAGE_NAME}"
-        }
-      }
-    }
-  ]
-  EOF
-  
-  # registra uma nova task-definition
-  aws ecs register-task-definition \
-  --family "$FAMILY" \
-  --network-mode awsvpc \
-  --requires-compatibilities FARGATE \
-  --cpu 512 --memory 1024 \
-  --execution-role-arn "${EXECUTION_ROLE_ARN}" \
-  --container-definitions file://container-definitions.json \
-  > new-task.json
+          cat <<EOF > container-definitions.json
+          [
+            {
+              "name": "${IMAGE_NAME}",
+              "image": "${IMAGE_URI}",
+              "portMappings": [
+                { "containerPort": 8080, "protocol": "tcp" }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "${LOG_GROUP}",
+                  "awslogs-region": "${AWS_REGION}",
+                  "awslogs-stream-prefix": "${IMAGE_NAME}"
+                }
+              }
+            }
+          ]
+          EOF
 
-  # extrai o ARN da nova revisão
-  NEW_ARN=$(jq -r '.taskDefinition.taskDefinitionArn' new-task.json)
-  echo "new_task_definition_arn=$NEW_ARN" >> $GITHUB_OUTPUT
+          aws ecs register-task-definition \
+            --family "$FAMILY" \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu 512 --memory 1024 \
+            --execution-role-arn "${EXECUTION_ROLE_ARN}" \
+            --container-definitions file://container-definitions.json \
+            > new-task.json
 
-- name: Update ECS Service
-  run: |
-    aws ecs update-service \
-      --cluster "${CLUSTER_NAME}" \
-      --service "${SERVICE_NAME}" \
-      --task-definition "${{ steps.register.outputs.new_task_definition_arn }}"
+          echo "new_task_definition_arn=$(jq -r '.taskDefinition.taskDefinitionArn' new-task.json)" >> $GITHUB_OUTPUT
+
+      - name: Update ECS Service
+        run: |
+          aws ecs update-service \
+            --cluster "${CLUSTER_NAME}" \
+            --service "${SERVICE_NAME}" \
+            --task-definition "${{ steps.register.outputs.new_task_definition_arn }}"
