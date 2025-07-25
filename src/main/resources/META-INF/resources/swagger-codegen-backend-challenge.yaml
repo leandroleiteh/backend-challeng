@@ -11,7 +11,7 @@ info:
 servers:
   - url: http://localhost:8080
     description: Desenvolvimento local
-  - url: http://quarkus-app-alb-1630246336.us-east-1.elb.amazonaws.com
+  - url: http://quarkus-app-alb-237966716.us-east-1.elb.amazonaws.com
     description: On AWS
 tags:
   - name: JWT
