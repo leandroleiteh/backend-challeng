@@ -123,7 +123,7 @@ resource "aws_lb_target_group" "tg" {
   name     = "${var.app_name}-tg"
   target_type = "ip"
   port     = 8080
-  protocol = "HTTP"c
+  protocol = "HTTP"
   vpc_id   = module.vpc.vpc_id
 
   health_check {
