@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-java@v3
         with:
           java-version: '21'
-          distribution: ''
+          distribution: 'temurin'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
