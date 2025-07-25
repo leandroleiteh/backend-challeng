@@ -5,7 +5,7 @@ import com.leandroleiteh.validators.ClaimValidator;
 public enum NameValidator implements ClaimValidator {
     INSTANCE;
 
-    public static final int MAX_SIZE_LENGTH = 256;
+    private static final int MAX_SIZE_LENGTH = 256;
 
     public boolean isValidClaim(String claimValue) {
         return claimValue != null
