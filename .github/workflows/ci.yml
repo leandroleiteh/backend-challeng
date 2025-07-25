@@ -9,7 +9,6 @@ jobs:
     name: Build & Push to ECR
     runs-on: ubuntu-latest
 
-    # Definimos as credenciais e região AWS para todos os passos deste job:
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -36,8 +35,9 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
         with:
+          # Only the AWS account ID—no URL or region suffix
           registries: |
-            675080425843.dkr.ecr.us-east-1.amazonaws.com
+            675080425843
 
       - name: Build and Push Docker image
         env:
