@@ -105,6 +105,16 @@ resource "aws_iam_role_policy" "ecs_observability_policy" {
   })
 }
 
+resource "aws_cloudwatch_log_group" "ecs_app" {
+  name              = "/ecs/${var.app_name}"
+  retention_in_days = 7
+  tags = {
+    Application = var.app_name
+    Env         = "prod"
+  }
+}
+
+
 # 5. Task Definition (app + OpenTelemetry Collector sidecar)
 resource "aws_ecs_task_definition" "task" {
   family                   = var.app_name
