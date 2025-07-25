@@ -5,7 +5,7 @@ terraform {
     bucket         = "meu-terraform-state-backend"        # ajuste para o nome do seu bucket
     key            = "backend-challenge/terraform.tfstate" # caminho dentro do bucket
     region         = "us-east-1"
-    dynamodb_table = "terraform-locks"                    # nome da sua tabela de locks
+    lock_table     = "terraform-locks"                    # nome da sua tabela de locks
     encrypt        = true
   }
 
