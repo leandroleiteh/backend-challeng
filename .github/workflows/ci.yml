@@ -1,18 +1,19 @@
+# .github/workflows/ci.yml
 name: CI – Build & Push Docker
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     env:
-      # URL do seu repo ECR, ex: 675080425843.dkr.ecr.us-east-1.amazonaws.com/backend-challenge
+      AWS_REGION:   us-east-1
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-      IMAGE_NAME: backend-challenge
-      IMAGE_TAG: ${{ github.sha }}
+      IMAGE_NAME:   backend-challenge
+      IMAGE_TAG:    ${{ github.sha }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,14 +29,25 @@ jobs:
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            us-east-1
+          aws-region:            ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
+      - name: Build, tag and push Docker image
         run: |
+          # aqui indicamos o Dockerfile e passamos o contexto "."
           docker build \
             -f src/main/docker/Dockerfile.jvm \
-            -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG .
+            -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+            .
           docker push $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+      - name: Save image details
+        run: echo "IMAGE_URI=$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG" > image-info.txt
+
+      - name: Upload image info
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-info
+          path: image-info.txt
