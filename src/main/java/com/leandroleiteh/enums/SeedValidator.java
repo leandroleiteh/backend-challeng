@@ -7,9 +7,15 @@ public enum SeedValidator implements ClaimValidator {
 
     @Override
     public boolean isValidClaim(String claimValue) {
-        return claimValue != null &&
-                !claimValue.isEmpty() &&
-                isPrime(Integer.parseInt(claimValue));
+        if (claimValue == null || claimValue.isEmpty()) {
+            return false;
+        }
+        try {
+            int n = Integer.parseInt(claimValue);
+            return isPrime(n);
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private boolean isPrime(int num) {
