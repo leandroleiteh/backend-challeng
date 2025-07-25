@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml
 name: CI – Build & Push Docker
 
 on:
@@ -7,15 +6,16 @@ on:
 
 jobs:
   build-and-push:
+    name: Build & Push to ECR
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION:   us-east-1
-      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-      IMAGE_NAME:   backend-challenge
-      IMAGE_TAG:    ${{ github.sha }}
+
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
@@ -24,30 +24,19 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+      - name: Build with Maven
+        run: ./mvnw clean package -DskipTests
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry: 675080425843.dkr.ecr.us-east-1.amazonaws.com
 
-      - name: Build, tag and push Docker image
+      - name: Build and Push Docker image
+        env:
+          ECR_REPOSITORY: 675080425843.dkr.ecr.us-east-1.amazonaws.com/backend-challenge
         run: |
-          # aqui indicamos o Dockerfile e passamos o contexto "."
           docker build \
             -f src/main/docker/Dockerfile.jvm \
-            -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
-            .
-          docker push $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
-
-      - name: Save image details
-        run: echo "IMAGE_URI=$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG" > image-info.txt
-
-      - name: Upload image info
-        uses: actions/upload-artifact@v3
-        with:
-          name: image-info
-          path: image-info.txt
+            -t $ECR_REPOSITORY:latest .
+          docker push $ECR_REPOSITORY:latest
