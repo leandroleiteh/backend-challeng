@@ -11,8 +11,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Desenvolvimento local
-  - url: https://api.seu-dominio.com
-    description: Produção (Kubernetes)
+  - url: http://quarkus-app-alb-1630246336.us-east-1.elb.amazonaws.com
+    description: AWS
 tags:
   - name: JWT
     description: Operações sobre tokens JWT
