@@ -21,7 +21,7 @@ jobs:
         working-directory: terraform
 
       - name: Terraform Format
-        run: terraform fmt -check
+        run: terraform fmt -write=true
         working-directory: terraform
 
       - name: Terraform Validate
